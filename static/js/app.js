@@ -108,13 +108,23 @@ function connectWS(jobId) {
         try { handleMessage(JSON.parse(data)); } catch (_) {}
     };
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
         if (state.jobId === jobId && state.jobStatus !== 'done' && state.jobStatus !== 'failed') {
-            setTimeout(() => connectWS(jobId), 3000);
+            // 如果是非正常关闭且还没收到 done/error，显示连接断开
+            if (e.code !== 1000) {
+                state.jobStatus = 'failed';
+                $('proc-error').textContent = '与服务器的连接已断开，请重试';
+                $('proc-error').classList.add('visible');
+                $('proc-title').textContent = '生成失败';
+            } else {
+                setTimeout(() => connectWS(jobId), 3000);
+            }
         }
     };
 
-    ws.onerror = () => {};
+    ws.onerror = () => {
+        // onerror 后会触发 onclose，由 onclose 统一处理
+    };
 }
 
 function handleMessage(msg) {

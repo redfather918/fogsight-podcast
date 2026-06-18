@@ -212,11 +212,25 @@ class Pipeline:
         except Exception as e:
             err_msg = str(e)
             logger.error(f"Pipeline 失败：job_id={job_id}，错误={err_msg}")
-            await update_job(job_id, status="failed", error=err_msg, message=f"失败：{err_msg}")
+
+            # 友好的错误提示
+            friendly_msg = err_msg
+            if "400" in err_msg or "rejected" in err_msg or "WebSocket" in err_msg:
+                friendly_msg = "语音合成服务连接失败（请检查火山引擎凭证配置）"
+            elif "timeout" in err_msg.lower() or "TimeoutError" in err_msg:
+                friendly_msg = "处理超时，请稍后重试"
+            elif "API key" in err_msg.lower() or "auth" in err_msg.lower():
+                friendly_msg = "API 密钥无效或已过期"
+            elif "pdf" in err_msg.lower() or "PDF" in err_msg:
+                friendly_msg = "PDF 解析失败，请检查文件格式"
+            else:
+                friendly_msg = f"生成失败：{err_msg[:100]}"
+
+            await update_job(job_id, status="failed", error=err_msg, message=friendly_msg)
             if self.ws_send:
                 await self.ws_send({
                     "type": "error",
-                    "message": err_msg,
+                    "message": friendly_msg,
                     "stage": "unknown",
                 })
             raise
