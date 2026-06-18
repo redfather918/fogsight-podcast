@@ -3,185 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fogsight Podcast — PDF 转视频播客</title>
+    <title>Fogsight Podcast</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+
 <div class="app">
 
-    <!-- ── Header ── -->
+    <!-- ═══ Header ═══ -->
     <header>
-        <a class="logo" href="javascript:void(0)" id="nav-home">
-            <div class="logo-icon">🎙</div>
-            Fogsight Podcast
-        </a>
-        <nav>
-            <a id="nav-home2" onclick="document.getElementById('nav-home').click()">首页</a>
-            <a id="nav-history">历史记录</a>
-        </nav>
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <rect width="24" height="24" rx="6" fill="url(#g)"/>
+                <circle cx="12" cy="7" r="3" fill="white" opacity="0.9"/>
+                <path d="M7 16c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="white" stroke-width="2" opacity="0.9"/>
+                <defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+            </svg>
+            <span>Fogsight Podcast</span>
+        </div>
     </header>
 
+    <!-- ═══ Main ═══ -->
     <main>
 
-        <!-- ── Toast ── -->
-        <div class="toast" id="toast"></div>
+        <!-- State: idle ──────────────────────── -->
+        <div id="state-idle" class="state active">
+            <div class="upload-section">
+                <h1>PDF &rarr; 讲解视频</h1>
+                <p class="subtitle">上传 PDF，AI 自动生成双人播客动画视频</p>
 
-        <!-- ══════════════════════════════════════════ -->
-        <!-- View: Upload                              -->
-        <!-- ══════════════════════════════════════════ -->
-        <div class="view active" id="view-upload">
-            <div class="hero">
-                <h1>PDF → <span>讲解视频</span> 一键生成</h1>
-                <p>上传文档，AI 自动生成双人播客对谈 + 动画讲解，3 分钟出片</p>
-            </div>
+                <div class="upload-zone" id="upload-zone">
+                    <input type="file" id="file-input" accept=".pdf">
+                    <div class="upload-placeholder">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        <p>拖拽 PDF 到此处，或点击选择</p>
+                        <span>最大 50MB · 最多 100 页</span>
+                    </div>
+                    <div class="upload-selected" id="file-info">
+                        <span id="file-name"></span>
+                        <button class="btn-reset" id="btn-reset" title="清除">&times;</button>
+                    </div>
+                </div>
 
-            <!-- 上传区 -->
-            <div class="upload-zone" id="upload-zone">
-                <input type="file" id="file-input" accept=".pdf">
-                <div class="upload-hint">
-                    <span class="upload-icon">📄</span>
-                    <h3>拖拽 PDF 到此处，或点击选择</h3>
-                    <p>支持最大 50MB · 最多 100 页</p>
+                <div class="options">
+                    <label>
+                        <span>视频时长</span>
+                        <select id="target-duration">
+                            <option value="30">30 秒</option>
+                            <option value="60" selected>60 秒</option>
+                            <option value="90">90 秒</option>
+                            <option value="120">2 分钟</option>
+                            <option value="180">3 分钟</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>语速<span id="speech-rate-val">0</span></span>
+                        <input type="range" id="speech-rate" min="-30" max="50" value="0" step="5">
+                    </label>
                 </div>
-                <div class="file-selected">
-                    <span>📎</span>
-                    <span id="file-name">未选择文件</span>
-                </div>
-            </div>
 
-            <!-- 参数配置 -->
-            <div class="options-row">
-                <div class="option-group">
-                    <label>视频时长</label>
-                    <select id="target-duration">
-                        <option value="30">30 秒</option>
-                        <option value="60" selected>60 秒</option>
-                        <option value="90">90 秒</option>
-                        <option value="120">2 分钟</option>
-                        <option value="180">3 分钟</option>
-                    </select>
-                </div>
-                <div class="option-group">
-                    <label>语速调整 <span id="speech-rate-label" style="color:var(--primary);font-weight:600">0</span></label>
-                    <input type="range" id="speech-rate" min="-30" max="50" value="0" step="5">
-                </div>
-            </div>
-
-            <!-- 提交 -->
-            <div class="submit-area">
-                <button class="btn btn-primary" id="submit-btn" disabled>
-                    🚀 开始生成
-                </button>
-            </div>
-
-            <!-- 特性卡片 -->
-            <div class="features">
-                <div class="feature-card">
-                    <span class="icon">🤖</span>
-                    <h4>AI 脚本编写</h4>
-                    <p>DeepSeek 大模型将 PDF 内容转化为双人对谈脚本</p>
-                </div>
-                <div class="feature-card">
-                    <span class="icon">🎙️</span>
-                    <h4>双人播客音频</h4>
-                    <p>火山引擎双人 TTS，大艺先生 & 咪仔同学真实对谈</p>
-                </div>
-                <div class="feature-card">
-                    <span class="icon">🎬</span>
-                    <h4>动画讲解视频</h4>
-                    <p>Canvas 动画 + 字幕同步，1080p MP4 一键下载</p>
-                </div>
+                <button class="btn" id="btn-submit" disabled>生成视频</button>
             </div>
         </div>
 
-        <!-- ══════════════════════════════════════════ -->
-        <!-- View: Processing                          -->
-        <!-- ══════════════════════════════════════════ -->
-        <div class="view" id="view-processing">
-            <div class="processing-header">
-                <button class="btn btn-secondary" id="back-from-processing" style="padding:0.5rem 1rem;font-size:0.9rem">
-                    ← 返回
-                </button>
-                <div class="processing-title">
-                    <h2>正在生成视频</h2>
-                    <p>请耐心等待，预计 1-3 分钟</p>
+        <!-- State: processing ─────────────────── -->
+        <div id="state-processing" class="state">
+            <div class="processing-section">
+                <h2 id="proc-title">正在生成...</h2>
+                <p class="proc-stage" id="proc-stage">准备中</p>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
                 </div>
-                <span class="job-id-badge" id="job-id-badge"></span>
-            </div>
+                <p class="proc-pct" id="progress-pct">0%</p>
 
-            <!-- 总进度 -->
-            <div class="progress-bar-wrap">
-                <div class="progress-bar-fill" id="progress-fill"></div>
-            </div>
-            <div class="progress-pct" id="progress-pct">0%</div>
+                <div id="proc-error" class="proc-error"></div>
 
-            <!-- 错误提示 -->
-            <div class="error-banner" id="error-banner"></div>
-
-            <!-- 阶段列表 -->
-            <div class="stages" id="stages-list"></div>
-
-            <!-- 日志 -->
-            <div style="margin-top:1.5rem">
-                <div style="font-size:0.85rem;color:var(--gray-500);margin-bottom:0.5rem;">处理日志</div>
-                <div class="log-box" id="log-box"></div>
+                <button class="btn btn-ghost" id="btn-cancel">取消</button>
             </div>
         </div>
 
-        <!-- ══════════════════════════════════════════ -->
-        <!-- View: Result                              -->
-        <!-- ══════════════════════════════════════════ -->
-        <div class="view" id="view-result">
-            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
-                <button class="btn btn-secondary" id="back-from-result" style="padding:0.5rem 1rem;font-size:0.9rem">
-                    ← 历史记录
-                </button>
-                <h2 style="font-size:1.4rem">🎉 视频生成完成</h2>
-            </div>
+        <!-- State: done ───────────────────────── -->
+        <div id="state-done" class="state">
+            <div class="done-section">
+                <h2>生成完成</h2>
 
-            <div class="result-grid">
-                <div class="video-player-wrap">
+                <div class="video-wrap">
                     <video id="result-video" controls playsinline></video>
                 </div>
-                <div class="result-info">
-                    <h3 id="result-title">生成的视频</h3>
-                    <div class="info-row">
-                        <span class="label">时长</span>
-                        <span id="result-duration">—</span>
+
+                <div class="done-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">时长</span>
+                        <span id="meta-duration">—</span>
                     </div>
-                    <div class="info-row">
-                        <span class="label">文件大小</span>
-                        <span id="result-size">—</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="label">分辨率</span>
-                        <span id="result-resolution">—</span>
-                    </div>
-                    <div class="result-actions">
-                        <button class="btn btn-primary" id="download-btn">⬇ 下载 MP4</button>
-                        <button class="btn btn-secondary" id="regenerate-btn">🔄 重新生成</button>
+                    <div class="meta-item">
+                        <span class="meta-label">大小</span>
+                        <span id="meta-size">—</span>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- ══════════════════════════════════════════ -->
-        <!-- View: History                             -->
-        <!-- ══════════════════════════════════════════ -->
-        <div class="view" id="view-history">
-            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
-                <h2 style="font-size:1.4rem">历史记录</h2>
-            </div>
-            <div class="history-list" id="history-list">
-                <p style="color:var(--gray-400);text-align:center;padding:3rem;">加载中...</p>
+                <div class="done-actions">
+                    <button class="btn" id="btn-download">下载 MP4</button>
+                    <button class="btn btn-ghost" id="btn-restart">重新生成</button>
+                </div>
             </div>
         </div>
 
     </main>
-
-    <footer>
-        Fogsight Podcast · PDF → 视频播客 · 由 DeepSeek + 火山引擎 TTS 驱动
-    </footer>
 </div>
 
 <script src="/static/js/app.js"></script>
