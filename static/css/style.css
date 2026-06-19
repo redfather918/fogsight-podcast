@@ -312,10 +312,11 @@ main {
     margin-bottom: 1.25rem;
 }
 
-.video-wrap video {
+.result-iframe {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    border: none;
+    display: block;
 }
 
 .done-meta {

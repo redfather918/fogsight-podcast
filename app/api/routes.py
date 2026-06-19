@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.config import settings
 from app.models.job import (
@@ -87,7 +87,7 @@ async def get_job_status(job_id: str):
     result = None
     if job["status"] == "done" and job.get("video_path"):
         result = JobResult(
-            video_url=f"/api/jobs/{job_id}/video",
+            video_url=f"/api/jobs/{job_id}/animation",
             duration=job.get("video_duration") or 0,
             file_size=job.get("video_size") or 0,
             title=job.get("video_title") or job.get("pdf_filename") or "",
@@ -110,25 +110,42 @@ async def get_job_status(job_id: str):
 
 # ── 下载视频 ──────────────────────────────────────────────
 
-@router.get("/jobs/{job_id}/video")
-async def download_video(job_id: str):
+@router.get("/jobs/{job_id}/animation")
+async def get_animation(job_id: str):
+    """返回音画同步的 HTML 动画页面"""
     job = await get_job(job_id)
     if not job:
         raise HTTPException(404, "任务不存在")
     if job["status"] != "done":
-        raise HTTPException(400, "视频尚未生成完成")
+        raise HTTPException(400, "动画尚未生成完成")
 
-    video_path = job.get("video_path")
-    if not video_path or not os.path.exists(video_path):
-        raise HTTPException(404, "视频文件不存在")
+    html_path = job.get("video_path")
+    if not html_path or not os.path.exists(html_path):
+        raise HTTPException(404, "动画文件不存在")
 
-    title = job.get("video_title") or "podcast"
-    filename = f"{title[:30]}.mp4".replace("/", "-").replace("\\", "-")
+    return FileResponse(html_path, media_type="text/html")
+
+
+# ── 下载 HTML（作为文件附件）─────────────────────────────
+
+@router.get("/jobs/{job_id}/animation/download")
+async def download_animation(job_id: str):
+    """将音画同步 HTML 作为附件下载"""
+    job = await get_job(job_id)
+    if not job:
+        raise HTTPException(404, "任务不存在")
+    if job["status"] != "done":
+        raise HTTPException(400, "动画尚未生成完成")
+
+    html_path = job.get("video_path")
+    if not html_path or not os.path.exists(html_path):
+        raise HTTPException(404, "动画文件不存在")
+
+    filename = (job.get("video_title") or "podcast-animation").replace(" ", "-")
     return FileResponse(
-        video_path,
-        media_type="video/mp4",
-        filename=filename,
-        headers={"Accept-Ranges": "bytes"},
+        html_path,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.html"'},
     )
 
 

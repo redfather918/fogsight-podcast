@@ -323,15 +323,15 @@ class VolcenginePodcastTTS:
             self.endpoint,
             additional_headers=headers,
             ssl=ssl_ctx,
-            open_timeout=15,
-            close_timeout=5,
-            ping_interval=10,
-            ping_timeout=10,
+            open_timeout=30,       # 连接建立超时 30s
+            close_timeout=10,
+            ping_interval=20,      # keepalive 间隔
+            ping_timeout=20,
         ) as ws:
             # 1. StartConnection
             await self._send(ws, MsgType.FullClientRequest, MsgTypeFlagBits.WithEvent,
                              EventType.StartConnection, payload=b"{}")
-            await self._wait_for(ws, EventType.ConnectionStarted, timeout=15)
+            await self._wait_for(ws, EventType.ConnectionStarted, timeout=30)
             self._log("连接建立")
 
             # 2. StartSession
@@ -350,17 +350,17 @@ class VolcenginePodcastTTS:
 
             await self._send(ws, MsgType.FullClientRequest, MsgTypeFlagBits.WithEvent,
                              EventType.StartSession, session_id, payload_bytes)
-            await self._wait_for(ws, EventType.SessionStarted, timeout=30)
+            await self._wait_for(ws, EventType.SessionStarted, timeout=60)
             self._log("会话启动，发送 FinishSession 触发生成...")
 
             # 3. FinishSession
             await self._send(ws, MsgType.FullClientRequest, MsgTypeFlagBits.WithEvent,
                              EventType.FinishSession, session_id, payload=b"{}")
 
-            # 4. 接收数据
+            # 4. 接收数据（长文本可能需要数分钟，超时设为 5 分钟）
             chunk_count = 0
             while True:
-                msg = await self._recv(ws, timeout=120)
+                msg = await self._recv(ws, timeout=300)
                 ev = msg["event"]
 
                 if ev == EventType.PodcastRoundStart:

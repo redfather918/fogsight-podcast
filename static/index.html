@@ -94,7 +94,7 @@
                 <h2>生成完成</h2>
 
                 <div class="video-wrap">
-                    <video id="result-video" controls playsinline></video>
+                    <iframe id="result-animation" class="result-iframe" allow="autoplay; fullscreen"></iframe>
                 </div>
 
                 <div class="done-meta">
@@ -109,7 +109,9 @@
                 </div>
 
                 <div class="done-actions">
-                    <button class="btn" id="btn-download">下载 MP4</button>
+                    <button class="btn" id="btn-open">全屏播放</button>
+                    <button class="btn btn-ghost" id="btn-download-html">下载 HTML</button>
+                    <button class="btn btn-ghost" id="btn-download-audio">下载 MP3</button>
                     <button class="btn btn-ghost" id="btn-restart">重新生成</button>
                 </div>
             </div>

@@ -12,7 +12,6 @@ from app.services.content_generator import ContentGenerator
 from app.services.animation_engine import AnimationEngine
 from app.services.podcast_tts import PodcastTTSService
 from app.services.audio_sync import AudioSync
-from app.services.video_renderer import VideoRenderer
 from app.utils.logger import logger
 from app.utils.cleanup import safe_delete
 
@@ -22,10 +21,8 @@ PROGRESS_MAP = {
     "parsing":   (0,  10),
     "scripting": (10, 25),
     "animating": (25, 45),
-    "tts":       (45, 70),
-    "syncing":   (70, 72),
-    "recording": (72, 92),
-    "composing": (92, 100),
+    "tts":       (45, 80),
+    "syncing":   (80, 100),
     "done":      (100, 100),
 }
 
@@ -35,8 +32,6 @@ STAGE_LABELS = {
     "animating": "动画生成",
     "tts":       "音频生成",
     "syncing":   "音画同步",
-    "recording": "视频录制",
-    "composing": "视频合成",
     "done":      "完成",
 }
 
@@ -51,7 +46,6 @@ class Pipeline:
         self.content_gen = ContentGenerator()
         self.anim_engine = AnimationEngine()
         self.audio_sync = AudioSync()
-        self.renderer = VideoRenderer()
 
     async def _push(self, job_id: str, stage: str, progress: int, message: str):
         """更新数据库 + 推送 WebSocket"""
@@ -153,11 +147,11 @@ class Pipeline:
             await tts_service.save(audio_result, audio_path)
             temp_files.append(audio_path)
 
-            await self._push(job_id, "tts", 70,
+            await self._push(job_id, "tts", 80,
                              f"音频生成完成：{audio_result.size:,} bytes，时长 {audio_result.duration:.1f}s")
 
             # ── Step 5: 音画同步 ──────────────────────────
-            await self._push(job_id, "syncing", 71, "注入音频到动画 HTML...")
+            await self._push(job_id, "syncing", 82, "注入音频到动画 HTML...")
 
             audio_filename = f"/api/jobs/{job_id}/audio"  # 前端访问路径
             synced_html = self.audio_sync.inject(html, audio_filename, audio_result.duration)
@@ -166,48 +160,35 @@ class Pipeline:
             with open(synced_html_path, "w", encoding="utf-8") as f:
                 f.write(synced_html)
             temp_files.append(synced_html_path)
-            await self._push(job_id, "syncing", 72, "音画同步完成")
-
-            # ── Step 6: 视频录制 ──────────────────────────
-            await self._push(job_id, "recording", 74, "Puppeteer 录制视频...")
-
-            renderer = VideoRenderer(
-                progress_callback=lambda m: asyncio.get_event_loop().create_task(self._log_ws(m))
-            )
-            mp4_path = await renderer.record(
-                html_path=synced_html_path,
-                audio_path=audio_path,
-                output_dir=output_dir,
-                job_id=job_id,
-                duration=audio_result.duration,
-            )
-
-            await self._push(job_id, "recording", 92, "视频录制完成")
+            await self._push(job_id, "syncing", 95, "音画同步完成")
 
             # ── Done ──────────────────────────────────────
-            video_size = os.path.getsize(mp4_path) if os.path.exists(mp4_path) else 0
+            audio_size = os.path.getsize(audio_path) if os.path.exists(audio_path) else 0
+            html_size = os.path.getsize(synced_html_path) if os.path.exists(synced_html_path) else 0
             await update_job(
                 job_id,
                 status="done",
                 stage="done",
                 progress=100,
-                message="视频生成完成！",
-                video_path=mp4_path,
+                message="动画生成完成！",
+                video_path=synced_html_path,
                 video_duration=audio_result.duration,
-                video_size=video_size,
+                video_size=html_size,
                 video_title=pdf_content.title,
             )
 
             if self.ws_send:
                 await self.ws_send({
                     "type": "done",
-                    "video_url": f"/api/jobs/{job_id}/video",
+                    "animation_url": f"/api/jobs/{job_id}/animation",
+                    "audio_url": f"/api/jobs/{job_id}/audio",
                     "duration": audio_result.duration,
-                    "file_size": video_size,
+                    "file_size": html_size,
+                    "audio_size": audio_size,
                     "title": pdf_content.title,
                 })
 
-            logger.info(f"Pipeline 完成：job_id={job_id}，视频={mp4_path}，大小={video_size:,} bytes")
+            logger.info(f"Pipeline 完成：job_id={job_id}，HTML={synced_html_path}，音频={audio_path}")
 
         except Exception as e:
             err_msg = str(e)
@@ -215,16 +196,22 @@ class Pipeline:
 
             # 友好的错误提示
             friendly_msg = err_msg
-            if "400" in err_msg or "rejected" in err_msg or "WebSocket" in err_msg:
-                friendly_msg = "语音合成服务连接失败（请检查火山引擎凭证配置）"
-            elif "timeout" in err_msg.lower() or "TimeoutError" in err_msg:
-                friendly_msg = "处理超时，请稍后重试"
-            elif "API key" in err_msg.lower() or "auth" in err_msg.lower():
-                friendly_msg = "API 密钥无效或已过期"
-            elif "pdf" in err_msg.lower() or "PDF" in err_msg:
+            err_lower = err_msg.lower()
+            if "400" in err_msg or "rejected" in err_msg:
+                friendly_msg = "语音合成服务请求被拒绝（请检查火山引擎凭证）"
+            elif "timeout" in err_lower or "TimeoutError" in err_msg:
+                if "TTS" in err_msg or "recv" in err_lower or "等待" in err_msg:
+                    friendly_msg = "语音合成超时（文本较长，正在重试...）"
+                else:
+                    friendly_msg = "处理超时，请稍后重试"
+            elif "401" in err_msg or "auth" in err_lower or "unauthorized" in err_lower:
+                friendly_msg = "API 密钥无效或已过期（401 认证失败）"
+            elif "API key" in err_msg or "access_token" in err_lower:
+                friendly_msg = "API 密钥配置错误"
+            elif "pdf" in err_lower or "PDF" in err_msg:
                 friendly_msg = "PDF 解析失败，请检查文件格式"
             else:
-                friendly_msg = f"生成失败：{err_msg[:100]}"
+                friendly_msg = f"生成失败：{err_msg[:200]}"
 
             await update_job(job_id, status="failed", error=err_msg, message=friendly_msg)
             if self.ws_send:

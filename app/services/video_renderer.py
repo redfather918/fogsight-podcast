@@ -33,14 +33,23 @@ async function record(htmlPath, outputPath, duration, width, height, fps) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
 
     const fileUrl = 'file://' + path.resolve(htmlPath);
-    await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+    console.error('Loading: ' + fileUrl);
+    await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 60000 });
 
-    // 等待动画初始化
-    await page.waitForFunction(
-        () => typeof window.ANIMATION_DURATION !== 'undefined',
-        { timeout: 10000 }
-    ).catch(() => {});
-    await new Promise(r => setTimeout(r, 1000));
+    // 等待动画初始化（容忍没有 ANIMATION_DURATION 的情况）
+    try {
+        await page.waitForFunction(
+            () => typeof window.ANIMATION_DURATION !== 'undefined',
+            { timeout: 15000 }
+        );
+        console.error('ANIMATION_DURATION detected');
+    } catch(e) {
+        console.warn('ANIMATION_DURATION not found, using parameter duration=' + duration);
+    }
+
+    // 额外等待页面渲染
+    await new Promise(r => setTimeout(r, 2000));
+    console.error('Starting screencast...');
 
     // 使用 CDP 截帧方式录制
     const client = await page.createCDPSession();
@@ -62,15 +71,18 @@ async function record(htmlPath, outputPath, duration, width, height, fps) {
 
     client.on('Page.screencastFrame', async (event) => {
         if (Date.now() - startTime > recordDuration) return;
-        const framePath = path.join(frameDir, `frame_${String(frameIdx).padStart(5, '0')}.jpg`);
+        const framePath = path.join(frameDir, `frame_${String(frameIdx).padStart(5,'0')}.jpg`);
         fs.writeFileSync(framePath, Buffer.from(event.data, 'base64'));
         frames.push(framePath);
         frameIdx++;
+        if (frameIdx % 30 === 0) {
+            console.error(`Captured ${frameIdx} frames (${Math.round((Date.now()-startTime)/1000)}s/${duration}s)`);
+        }
         await client.send('Page.screencastFrameAck', { sessionId: event.sessionId });
     });
 
-    // 录制指定时长
-    await new Promise(r => setTimeout(r, recordDuration + 500));
+    // 录制指定时长（加缓冲）
+    await new Promise(r => setTimeout(r, recordDuration + 2000));
 
     await client.send('Page.stopScreencast');
     await browser.close();
@@ -80,7 +92,7 @@ async function record(htmlPath, outputPath, duration, width, height, fps) {
 
 const [, , htmlPath, outputPath, duration, width, height, fps] = process.argv;
 record(htmlPath, outputPath, parseFloat(duration), parseInt(width), parseInt(height), parseInt(fps))
-    .catch(e => { console.error(e.message); process.exit(1); });
+    .catch(e => { console.error('RECORD_ERROR: ' + e.message); process.exit(1); });
 """
 
 
@@ -124,7 +136,10 @@ class VideoRenderer:
         node_path = self._find_node()
         self._log(f"使用 Node: {node_path}")
 
-        # 执行录屏
+        # 执行录屏（设置 NODE_PATH 以便找到 puppeteer 模块）
+        node_modules = r"C:\Users\HUAWEI\.workbuddy\binaries\node\workspace\node_modules"
+        env = {**os.environ, "NODE_PATH": node_modules}
+
         cmd = [
             node_path, script_path,
             os.path.abspath(html_path),
@@ -133,12 +148,13 @@ class VideoRenderer:
             str(width), str(height), str(fps),
         ]
 
-        timeout = duration + 60
+        timeout = max(duration * 2, 120)  # 至少 2 倍时长或 120s
         self._log("正在录制帧序列...")
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
 
         try:
@@ -199,7 +215,7 @@ class VideoRenderer:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=max(duration * 3, 180))
 
         if proc.returncode != 0:
             err = stderr.decode("utf-8", errors="ignore")[-1000:]

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ── 应用配置 ──
     app_host: str = "0.0.0.0"
-    app_port: int = 8000
+    app_port: int = 8012
     max_pdf_size_mb: int = 50
     max_pdf_pages: int = 100
     max_video_duration: int = 300

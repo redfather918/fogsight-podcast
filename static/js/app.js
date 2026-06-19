@@ -16,8 +16,6 @@ const STAGES = {
     animating: '制作动画',
     tts:       '合成语音',
     syncing:   '音画同步',
-    recording: '录制画面',
-    composing: '合成视频',
 };
 
 /* ── State switching ── */
@@ -161,11 +159,13 @@ function updateProgress(pct) {
 function showResult(data) {
     show('done');
 
-    const url = data.video_url || `/api/jobs/${state.jobId}/video`;
-    $('result-video').src = url;
+    const animUrl = data.animation_url || `/api/jobs/${state.jobId}/animation`;
+    state.animUrl = animUrl;
+    state.audioUrl = data.audio_url || `/api/jobs/${state.jobId}/audio`;
+    $('result-animation').src = animUrl;
 
     $('meta-duration').textContent = fmtDuration(data.duration || 0);
-    $('meta-size').textContent = fmtSize(data.file_size || 0);
+    $('meta-size').textContent = fmtSize((data.file_size || 0) + (data.audio_size || 0));
 }
 
 /* ── Cancel / Restart ── */
@@ -182,16 +182,31 @@ $('btn-restart').addEventListener('click', () => {
     state.jobId = null;
     state.jobStatus = null;
     state.selectedFile = null;
+    state.animUrl = null;
+    state.audioUrl = null;
     $('file-input').value = '';
     $('upload-zone').classList.remove('has-file');
     $('btn-submit').disabled = true;
     show('idle');
 });
 
-$('btn-download').addEventListener('click', () => {
+$('btn-open').addEventListener('click', () => {
+    if (state.animUrl) window.open(state.animUrl, '_blank');
+});
+
+$('btn-download-html').addEventListener('click', () => {
+    if (!state.jobId) return;
     const a = document.createElement('a');
-    a.href = $('result-video').src;
-    a.download = 'podcast.mp4';
+    a.href = `/api/jobs/${state.jobId}/animation/download`;
+    a.download = 'podcast-animation.html';
+    a.click();
+});
+
+$('btn-download-audio').addEventListener('click', () => {
+    if (!state.audioUrl) return;
+    const a = document.createElement('a');
+    a.href = state.audioUrl;
+    a.download = 'podcast-audio.mp3';
     a.click();
 });
 
